@@ -1,0 +1,21 @@
+{
+  "name": "family-photo-album",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "seed": "cd backend && npm run seed",
+    "dev": "concurrently -n backend,frontend -c blue,green \"cd backend && PORT=3208 npm run dev\" \"cd frontend && VITE_PORT=5208 VITE_API_PORT=3208 npm run dev\"",
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "dev:backend": "cd backend && PORT=3208 npm run dev",
+    "dev:frontend": "cd frontend && VITE_PORT=5208 VITE_API_PORT=3208 npm run dev",
+    "start": "cd backend && PORT=3208 npm run start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}

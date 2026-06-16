@@ -8,14 +8,16 @@ export default function PhotoDetail() {
   const photoId = Number(id);
   const [photo, setPhoto] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
+  const [newTag, setNewTag] = useState('');
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.getPhoto(photoId), api.getComments(photoId)])
-      .then(([p, c]) => { setPhoto(p); setComments(c); })
+    Promise.all([api.getPhoto(photoId), api.getComments(photoId), api.getPhotoTags(photoId)])
+      .then(([p, c, t]) => { setPhoto(p); setComments(c); setTags(t); })
       .finally(() => setLoading(false));
   }, [photoId]);
 
@@ -46,6 +48,26 @@ export default function PhotoDetail() {
       await api.deleteComment(commentId);
       setComments(prev => prev.filter(c => c.id !== commentId));
       setPhoto((prev: any) => ({ ...prev, commentCount: Math.max(0, (prev.commentCount || 1) - 1) }));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddTag = async () => {
+    if (!newTag.trim() || !user) return;
+    try {
+      const result = await api.addPhotoTag(photoId, newTag.trim());
+      setTags(prev => [...prev, result]);
+      setNewTag('');
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRemoveTag = async (tagId: number) => {
+    try {
+      await api.removePhotoTag(photoId, tagId);
+      setTags(prev => prev.filter(t => t.id !== tagId));
     } catch (err: any) {
       alert(err.message);
     }
@@ -102,6 +124,33 @@ export default function PhotoDetail() {
               <span>📸 {photo.uploaderName}</span>
               {photo.takenDate && <span>📅 {photo.takenDate}</span>}
               <span>🕐 {photo.createdAt?.slice(0, 10)}</span>
+            </div>
+            <div className="photo-tags-section">
+              <span className="tags-label">🏷️ 标签</span>
+              <div className="tag-list">
+                {tags.map(tag => (
+                  <span key={tag.id} className="tag-item">
+                    {tag.name}
+                    {user && (
+                      <button className="tag-remove" onClick={() => handleRemoveTag(tag.id)}>×</button>
+                    )}
+                  </span>
+                ))}
+                {tags.length === 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--text-lighter)' }}>暂无标签</span>
+                )}
+              </div>
+              {user && (
+                <div className="tag-input-row">
+                  <input
+                    value={newTag}
+                    onChange={e => setNewTag(e.target.value)}
+                    placeholder="添加标签，回车确认"
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+                  />
+                  <button className="btn btn-sm btn-ghost" onClick={handleAddTag}>添加</button>
+                </div>
+              )}
             </div>
           </div>
         </div>

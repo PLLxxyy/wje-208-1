@@ -9,7 +9,8 @@ import {
   createPhoto, getPhotoById, getPhotosByAlbumId, getPhotosByUserId, getAllPhotos, deletePhoto,
   toggleLike, isLikedByUser, getLikeCount,
   createComment, getCommentsByPhotoId, deleteComment,
-  getAllUsers, deleteUser, getUserStats
+  getAllUsers, deleteUser, getUserStats,
+  addTagToPhoto, removeTagFromPhoto, getTagsByPhotoId, getAllTags, getPhotosByTag
 } from '../db';
 
 const router = Router();
@@ -228,7 +229,7 @@ router.get('/photos/:id', optionalAuth, (req: AuthRequest, res: Response) => {
 
 router.post('/photos', requireAuth, (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, takenDate, imageData, albumId } = req.body;
+    const { title, description, takenDate, imageData, albumId, tags } = req.body;
     if (!title || !imageData || !albumId) {
       return res.status(400).json({ error: '请填写照片标题并选择相册' });
     }
@@ -241,12 +242,20 @@ router.post('/photos', requireAuth, (req: AuthRequest, res: Response) => {
       imageData, req.userId!, Number(albumId)
     );
 
-    // Update album cover if this is the first photo
     if (album.photo_count === 0) {
       updateAlbumCover(Number(albumId), imageData);
     }
 
-    res.json({ id: result.lastInsertRowid, message: '照片上传成功' });
+    const photoId = result.lastInsertRowid;
+    if (Array.isArray(tags)) {
+      for (const tagName of tags) {
+        if (typeof tagName === 'string' && tagName.trim()) {
+          addTagToPhoto(photoId, tagName.trim());
+        }
+      }
+    }
+
+    res.json({ id: photoId, message: '照片上传成功' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -269,10 +278,19 @@ router.post('/photos/bulk', requireAuth, (req: AuthRequest, res: Response) => {
         photo.title, photo.description || '', photo.takenDate || new Date().toISOString().split('T')[0],
         photo.imageData, req.userId!, Number(photo.albumId)
       );
-      results.push(result.lastInsertRowid as number);
+      const photoId = result.lastInsertRowid as number;
+      results.push(photoId);
 
       if (album.photo_count === 0 && results.length === 1) {
         updateAlbumCover(Number(photo.albumId), photo.imageData);
+      }
+
+      if (Array.isArray(photo.tags)) {
+        for (const tagName of photo.tags) {
+          if (typeof tagName === 'string' && tagName.trim()) {
+            addTagToPhoto(photoId, tagName.trim());
+          }
+        }
       }
     }
 
@@ -352,6 +370,74 @@ router.delete('/comments/:id', requireAuth, (req: AuthRequest, res: Response) =>
   try {
     deleteComment(Number(req.params.id));
     res.json({ message: '评论已删除' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Tag Routes ──
+
+router.get('/tags', (_req: AuthRequest, res: Response) => {
+  try {
+    const tags = getAllTags();
+    res.json(tags.map((t: any) => ({ id: t.id, name: t.name, photoCount: t.photo_count })));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/tags/:id/photos', optionalAuth, (req: AuthRequest, res: Response) => {
+  try {
+    const photos = getPhotosByTag(Number(req.params.id));
+    const result = photos.map((p: any) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      takenDate: p.taken_date,
+      imageData: p.image_data,
+      uploaderName: p.uploader_name,
+      uploaderId: p.uploader_id,
+      albumId: p.album_id,
+      albumName: p.album_name,
+      likeCount: p.like_count,
+      commentCount: p.comment_count,
+      createdAt: p.created_at,
+      liked: req.userId ? isLikedByUser(req.userId, p.id) : false
+    }));
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/photos/:id/tags', (req: AuthRequest, res: Response) => {
+  try {
+    const tags = getTagsByPhotoId(Number(req.params.id));
+    res.json(tags.map((t: any) => ({ id: t.id, name: t.name })));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/photos/:id/tags', requireAuth, (req: AuthRequest, res: Response) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: '请输入标签名' });
+
+    const photo = getPhotoById(Number(req.params.id));
+    if (!photo) return res.status(404).json({ error: '照片不存在' });
+
+    const tag = addTagToPhoto(Number(req.params.id), name.trim());
+    res.json({ id: tag.id, name: tag.name });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/photos/:photoId/tags/:tagId', requireAuth, (req: AuthRequest, res: Response) => {
+  try {
+    removeTagFromPhoto(Number(req.params.photoId), Number(req.params.tagId));
+    res.json({ message: '标签已移除' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

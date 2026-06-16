@@ -22,6 +22,9 @@ function AlbumCover({ album }: { album: any }) {
 
 export default function Home() {
   const [albums, setAlbums] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
+  const [selectedTag, setSelectedTag] = useState<number | null>(null);
+  const [filteredPhotos, setFilteredPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
@@ -31,8 +34,29 @@ export default function Home() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.getAlbums().then(setAlbums).finally(() => setLoading(false));
+    Promise.all([api.getAlbums(), api.getTags()])
+      .then(([a, t]) => { setAlbums(a); setTags(t); })
+      .finally(() => setLoading(false));
   }, []);
+
+  const handleSelectTag = async (tagId: number | null) => {
+    if (tagId === selectedTag) {
+      setSelectedTag(null);
+      setFilteredPhotos([]);
+      return;
+    }
+    setSelectedTag(tagId);
+    if (tagId !== null) {
+      try {
+        const photos = await api.getPhotosByTag(tagId);
+        setFilteredPhotos(photos);
+      } catch {
+        setFilteredPhotos([]);
+      }
+    } else {
+      setFilteredPhotos([]);
+    }
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -67,7 +91,58 @@ export default function Home() {
         )}
       </div>
 
-      {albums.length === 0 ? (
+      {tags.length > 0 && (
+        <div className="tag-filter-bar">
+          <span className="tag-filter-label">🏷️ 按标签筛选：</span>
+          <button
+            className={`tag-filter-btn ${selectedTag === null ? 'active' : ''}`}
+            onClick={() => handleSelectTag(null)}
+          >
+            全部
+          </button>
+          {tags.map(tag => (
+            <button
+              key={tag.id}
+              className={`tag-filter-btn ${selectedTag === tag.id ? 'active' : ''}`}
+              onClick={() => handleSelectTag(tag.id)}
+            >
+              {tag.name} ({tag.photoCount})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedTag !== null ? (
+        filteredPhotos.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">🏷️</div>
+            <h3>该标签下暂无照片</h3>
+          </div>
+        ) : (
+          <div className="photo-grid">
+            {filteredPhotos.map(photo => (
+              <div key={photo.id} className="photo-card">
+                <div
+                  className="photo-thumb"
+                  style={{ background: photo.imageData || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                  onClick={() => navigate(`/photos/${photo.id}`)}
+                >
+                  <span style={{ fontSize: 40 }}>
+                    {['🌸', '🏖️', '🎂', '🎄', '🌅', '🎈', '🌻', '🐱', '🐶', '🍜'][photo.id % 10]}
+                  </span>
+                </div>
+                <div className="photo-card-body">
+                  <h4 onClick={() => navigate(`/photos/${photo.id}`)} style={{ cursor: 'pointer' }}>{photo.title}</h4>
+                  <div className="photo-meta">
+                    <span className="meta-item">❤️ {photo.likeCount || 0}</span>
+                    <span className="meta-item">💬 {photo.commentCount || 0}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : albums.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">📷</div>
           <h3>还没有相册</h3>

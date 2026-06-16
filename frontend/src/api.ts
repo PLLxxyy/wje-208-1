@@ -53,6 +53,15 @@ export const api = {
   deletePhoto: (id: number) =>
     request(`/photos/${id}`, { method: 'DELETE' }),
 
+  // Tags
+  getTags: () => request('/tags'),
+  getPhotosByTag: (tagId: number) => request(`/tags/${tagId}/photos`),
+  getPhotoTags: (photoId: number) => request(`/photos/${photoId}/tags`),
+  addPhotoTag: (photoId: number, name: string) =>
+    request(`/photos/${photoId}/tags`, { method: 'POST', body: JSON.stringify({ name }) }),
+  removePhotoTag: (photoId: number, tagId: number) =>
+    request(`/photos/${photoId}/tags/${tagId}`, { method: 'DELETE' }),
+
   // Likes
   toggleLike: (photoId: number) =>
     request(`/photos/${photoId}/like`, { method: 'POST' }),

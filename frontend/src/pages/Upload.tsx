@@ -22,6 +22,7 @@ interface PhotoEntry {
   description: string;
   takenDate: string;
   gradient: string;
+  tags: string[];
 }
 
 export default function Upload() {
@@ -31,6 +32,7 @@ export default function Upload() {
   const [albums, setAlbums] = useState<any[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState(preAlbumId);
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
+  const [tagInput, setTagInput] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [albumsLoading, setAlbumsLoading] = useState(true);
   const [success, setSuccess] = useState('');
@@ -50,6 +52,7 @@ export default function Upload() {
         description: '',
         takenDate: new Date().toISOString().split('T')[0],
         gradient: GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)],
+        tags: [],
       });
     }
     setPhotos(prev => [...prev, ...newPhotos]);
@@ -61,6 +64,24 @@ export default function Upload() {
 
   const updatePhoto = (id: string, field: keyof PhotoEntry, value: string) => {
     setPhotos(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const addTagToEntry = (photoId: string) => {
+    const input = (tagInput[photoId] || '').trim();
+    if (!input) return;
+    setPhotos(prev => prev.map(p => {
+      if (p.id !== photoId) return p;
+      if (p.tags.includes(input)) return p;
+      return { ...p, tags: [...p.tags, input] };
+    }));
+    setTagInput(prev => ({ ...prev, [photoId]: '' }));
+  };
+
+  const removeTagFromEntry = (photoId: string, tag: string) => {
+    setPhotos(prev => prev.map(p => {
+      if (p.id !== photoId) return p;
+      return { ...p, tags: p.tags.filter(t => t !== tag) };
+    }));
   };
 
   const handleSubmit = async () => {
@@ -76,6 +97,7 @@ export default function Upload() {
         takenDate: p.takenDate,
         imageData: p.gradient,
         albumId: Number(selectedAlbum),
+        tags: p.tags.filter(t => t.trim()),
       }));
       await api.createPhotosBulk(payload);
       setSuccess(`成功上传 ${valid.length} 张照片`);
@@ -149,6 +171,25 @@ export default function Upload() {
                     value={photo.takenDate}
                     onChange={e => updatePhoto(photo.id, 'takenDate', e.target.value)}
                   />
+                  <div className="tag-input-row">
+                    <input
+                      placeholder="添加标签，回车确认"
+                      value={tagInput[photo.id] || ''}
+                      onChange={e => setTagInput(prev => ({ ...prev, [photo.id]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTagToEntry(photo.id); } }}
+                    />
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => addTagToEntry(photo.id)}>+</button>
+                  </div>
+                  {photo.tags.length > 0 && (
+                    <div className="tag-list">
+                      {photo.tags.map(tag => (
+                        <span key={tag} className="tag-item">
+                          {tag}
+                          <button type="button" className="tag-remove" onClick={() => removeTagFromEntry(photo.id, tag)}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

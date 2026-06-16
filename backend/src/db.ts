@@ -69,6 +69,19 @@ function initDb(db: Database.Database) {
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS photo_tags (
+      photo_id INTEGER NOT NULL,
+      tag_id INTEGER NOT NULL,
+      PRIMARY KEY (photo_id, tag_id),
+      FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    );
   `);
 }
 
@@ -305,4 +318,60 @@ export function getUserStats(userId: number) {
     albumCount: getUserAlbumCount(userId),
     likesReceived: getUserLikesReceived(userId),
   };
+}
+
+// ── Tag Functions ──
+
+export function addTagToPhoto(photoId: number, tagName: string): any {
+  const db = getDb();
+  const trimmed = tagName.trim();
+  if (!trimmed) return null;
+  let tag: any = db.prepare('SELECT * FROM tags WHERE name = ?').get(trimmed);
+  if (!tag) {
+    const result = db.prepare('INSERT INTO tags (name) VALUES (?)').run(trimmed);
+    tag = { id: result.lastInsertRowid, name: trimmed };
+  }
+  db.prepare('INSERT OR IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)').run(photoId, tag.id);
+  return tag;
+}
+
+export function removeTagFromPhoto(photoId: number, tagId: number): any {
+  const db = getDb();
+  return db.prepare('DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ?').run(photoId, tagId);
+}
+
+export function getTagsByPhotoId(photoId: number): any[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT t.id, t.name FROM tags t
+    JOIN photo_tags pt ON t.id = pt.tag_id
+    WHERE pt.photo_id = ?
+    ORDER BY t.name
+  `).all(photoId);
+}
+
+export function getAllTags(): any[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT t.id, t.name, COUNT(pt.photo_id) as photo_count
+    FROM tags t
+    LEFT JOIN photo_tags pt ON t.id = pt.tag_id
+    GROUP BY t.id
+    ORDER BY t.name
+  `).all();
+}
+
+export function getPhotosByTag(tagId: number): any[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.*, u.display_name as uploader_name, a.name as album_name,
+           (SELECT COUNT(*) FROM likes WHERE photo_id = p.id) as like_count,
+           (SELECT COUNT(*) FROM comments WHERE photo_id = p.id) as comment_count
+    FROM photos p
+    JOIN photo_tags pt ON p.id = pt.photo_id
+    JOIN users u ON p.uploader_id = u.id
+    JOIN albums a ON p.album_id = a.id
+    WHERE pt.tag_id = ?
+    ORDER BY p.created_at DESC
+  `).all(tagId);
 }
